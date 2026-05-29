@@ -90,3 +90,74 @@
   color: var(--color-accent-gold);
   margin-bottom: var(--space-2);
 }
+
+/* Premium Character Illustration Styles */
+.class-portrait-container {
+  width: 100px;
+  height: 100px;
+  margin: 0 auto 15px auto;
+  border-radius: 50%;
+  border: 3px solid var(--color-border);
+  overflow: hidden;
+  background: radial-gradient(circle, rgba(245, 158, 11, 0.15) 0%, rgba(0, 0, 0, 0.4) 100%);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
+  transition: all var(--transition-base);
+}
+
+.card-class:hover .class-portrait-container,
+.card-class.selected .class-portrait-container {
+  border-color: var(--color-accent-gold);
+  box-shadow: 0 0 15px rgba(245, 158, 11, 0.4);
+  transform: scale(1.05);
+}
+
+.class-portrait-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform var(--transition-base);
+}
+
+.card-class:hover .class-portrait-img {
+  transform: scale(1.1);
+}
+
+/* Dialogue NPC Portrait */
+.npc-portrait-container {
+  width: 70px;
+  height: 70px;
+  border-radius: 50%;
+  border: 2px solid var(--color-accent-gold);
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.25);
+  overflow: hidden;
+  background: #000;
+  flex-shrink: 0;
+}
+
+.npc-portrait-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* HUD Player Avatar Portrait */
+.hud-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 2px solid var(--color-accent-gold);
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.2);
+  overflow: hidden;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg-tertiary);
+  padding: 0 !important;
+}
+
+.hud-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+

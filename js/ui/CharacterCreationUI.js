@@ -1,12 +1,9 @@
-/**
- * CharacterCreationUI.js — UI for Player Name input and class selection with interactive stats preview
- */
-
 import { CLASSES, SCREENS } from '../utils/constants.js';
 import { gameState } from '../core/GameState.js';
 import { CLASS_DATA } from '../data/classes.js';
 import { validatePlayerName } from '../utils/validators.js';
 import { Player } from '../models/Player.js';
+import { CHARACTER_IMAGES } from '../data/images.js';
 
 export class CharacterCreationUI {
   constructor() {
@@ -23,11 +20,17 @@ export class CharacterCreationUI {
     for (const key in CLASS_DATA) {
       const cls = CLASS_DATA[key];
       const isSelected = this.selectedClass === cls.id;
+      
+      const base64Img = CHARACTER_IMAGES[cls.id];
+      const portraitHtml = base64Img 
+        ? `<div class="class-portrait-container"><img src="data:image/png;base64,${base64Img}" class="class-portrait-img" alt="${cls.name}"></div>`
+        : `<div class="card-class-icon">${cls.icon}</div>`;
+
       classCardsHtml += `
         <div class="card card-class ${isSelected ? 'selected' : ''}" data-class="${cls.id}">
-          <div class="card-class-icon">${cls.icon}</div>
-          <h3 class="card-class-name">${cls.name}</h3>
-          <p class="text-sm text-secondary">${cls.description}</p>
+          ${portraitHtml}
+          <h3 class="card-class-name" style="margin-top: 10px">${cls.name}</h3>
+          <p class="text-sm text-secondary" style="margin: 5px 0 10px 0">${cls.description}</p>
           <div class="class-stats">
             <div class="stat-row"><span class="text-muted">Vida:</span><span class="stat-value">${cls.baseStats.maxHp}</span></div>
             <div class="stat-row"><span class="text-muted">Maná:</span><span class="stat-value">${cls.baseStats.maxMp}</span></div>

@@ -133,14 +133,23 @@
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
 }
 
+.exploration-sandbox-container {
+  display: flex;
+  flex-direction: row;
+  width: 100%;
+  background: #090d13;
+  overflow: hidden;
+  border-bottom-left-radius: var(--radius-2xl);
+  border-bottom-right-radius: var(--radius-2xl);
+}
+
 .phaser-canvas-container {
+  flex: 1;
   display: flex;
   justify-content: center;
   align-items: center;
-  background: #090d13;
-  padding: 10px;
-  border-bottom-left-radius: var(--radius-2xl);
-  border-bottom-right-radius: var(--radius-2xl);
+  background: #05080c;
+  padding: 15px;
   overflow: hidden;
 }
 
@@ -151,6 +160,176 @@
   height: auto;
 }
 
+/* Sandbox and Crafting Sidebar Styles */
+.sandbox-sidebar {
+  width: 320px;
+  background: rgba(13, 17, 23, 0.95);
+  border-left: 1px solid var(--color-border);
+  padding: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  overflow-y: auto;
+  max-height: 576px; /* Match canvas height */
+  box-sizing: border-box;
+}
+
+.sandbox-section {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: var(--space-3);
+}
+
+.sandbox-section:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.section-title {
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  color: var(--color-accent-gold);
+  margin-bottom: var(--space-2);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.seed-control-group {
+  display: flex;
+  gap: 8px;
+}
+
+.seed-control-group input {
+  flex: 1;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--color-border);
+  color: #fff;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-md);
+  font-size: 0.75rem;
+}
+
+.sandbox-materials-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.material-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-lg);
+  padding: 6px 10px;
+  transition: all var(--transition-base);
+}
+
+.material-chip:hover {
+  border-color: rgba(245, 158, 11, 0.4);
+  background: rgba(245, 158, 11, 0.05);
+}
+
+.material-icon {
+  font-size: 1.2rem;
+}
+
+.material-label {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+  flex: 1;
+}
+
+.material-count {
+  font-weight: bold;
+  color: #fff;
+  font-size: 0.85rem;
+}
+
+.sandbox-tools-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tool-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: var(--radius-md);
+  padding: var(--space-2);
+  font-size: 0.75rem;
+}
+
+.crafting-recipes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  max-height: 200px;
+  padding-right: 4px;
+}
+
+.crafting-recipes-list::-webkit-scrollbar { width: 4px; }
+.crafting-recipes-list::-webkit-scrollbar-track { background: transparent; }
+.crafting-recipes-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: var(--radius-full);
+}
+
+.recipe-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-lg);
+  padding: var(--space-2) var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: all var(--transition-base);
+}
+
+.recipe-card.craftable {
+  border-color: rgba(245, 158, 11, 0.3);
+  background: rgba(245, 158, 11, 0.02);
+}
+
+.recipe-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.recipe-name {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #fff;
+}
+
+.recipe-desc {
+  font-size: 0.65rem;
+  color: var(--color-text-secondary);
+}
+
+.recipe-costs {
+  font-size: 0.65rem;
+  color: var(--color-accent-gold);
+  font-family: var(--font-mono);
+}
+
+.text-xxs {
+  font-size: 0.65rem;
+}
+
+.text-xxs.text-muted {
+  color: #64748b;
+}
+
+/* Animations */
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }

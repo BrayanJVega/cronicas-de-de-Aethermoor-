@@ -10,6 +10,7 @@ import { NPC_DATA } from '../data/npcs.js';
 import { formatNumber, percentage } from '../utils/helpers.js';
 import { expForLevel } from '../utils/constants.js';
 import { ExplorationMapUI } from './ExplorationMapUI.js';
+import { CHARACTER_IMAGES } from '../data/images.js';
 
 export class GameUI {
   constructor() {
@@ -75,12 +76,17 @@ export class GameUI {
       logsHtml += `<div class="log-entry log-${entry.type}">${entry.text}</div>`;
     }
 
+    const base64Img = CHARACTER_IMAGES[player.classType];
+    const avatarHtml = base64Img 
+      ? `<img src="data:image/png;base64,${base64Img}" class="hud-avatar-img" alt="${player.classType}">`
+      : `🛡️`;
+
     container.innerHTML = `
       <div class="screen-game">
         <!-- TOP HUD -->
         <header class="hud">
           <div class="hud-player-info">
-            <div class="hud-avatar">🛡️</div>
+            <div class="hud-avatar">${avatarHtml}</div>
             <div class="hud-details">
               <div class="hud-name">${player.name}</div>
               <div class="hud-level font-mono">Nivel ${player.level} (${player.classType.toUpperCase()})</div>

@@ -1,21 +1,24 @@
 /**
  * ExplorationMapUI.js — High-fidelity 2D visual adventure exploration map using Phaser & EasyStar.js.
- * Displays procedural maps with obstacles, roaming enemies, treasure chests, and pathfinding.
+ * Implements a Seeded Procedural Minecraft-style Open World with Resource Harvesting,
+ * Action Swing Frames, Particle FX, and a premium Crafting Sidebar connected to the RPG inventory.
  */
 
 import Phaser from 'phaser';
 import EasyStar from 'easystarjs';
+import Chance from 'chance';
 import { gameState } from '../core/GameState.js';
 import { eventBus } from '../core/EventBus.js';
 import { audioManager } from '../services/AudioManager.js';
 import { MAP_DATA } from '../data/maps.js';
+import { ITEM_DATA } from '../data/items.js';
 import { REGIONS, SCREENS, EVENTS } from '../utils/constants.js';
 import logger from '../utils/logger.js';
 
-// Configuration constants for the grid
+// Configuration constants for the massive seeded open-world grid
 const TILE_SIZE = 48;
-const GRID_COLS = 16;
-const GRID_ROWS = 12;
+const GRID_COLS = 36; // Big scrollable world!
+const GRID_ROWS = 28;
 
 class ExplorationScene extends Phaser.Scene {
   constructor() {
@@ -28,44 +31,69 @@ class ExplorationScene extends Phaser.Scene {
     this.parentUI = data.parentUI;
 
     this.grid = [];
-    this.playerGridPos = { x: 1, y: 1 };
-    this.exitGridPos = { x: 14, y: 10 };
+    this.playerGridPos = { x: 2, y: 2 }; // Safe spawn coordinates
+    this.exitGridPos = { x: GRID_COLS - 3, y: GRID_ROWS - 3 };
     this.chests = [];
     this.enemies = [];
+    this.resources = [];
     this.isMoving = false;
     this.moveQueue = [];
 
-    // Configure theme variables
+    // Get current world seed
+    this.seed = gameState.get('currentSeed') || 'Aethermoor_Default';
+    this.chanceInstance = new Chance(this.seed);
+
+    // Retrieve active player data and initialize materials if missing
+    this.player = gameState.getPlayer();
+    if (this.player) {
+      if (!this.player.sandboxMaterials) {
+        this.player.sandboxMaterials = { wood: 0, stone: 0, iron: 0, gems: 0 };
+      }
+      if (!this.player.sandboxTools) {
+        this.player.sandboxTools = { axe: 1, pickaxe: 1 };
+      }
+    }
+
+    // Configure biome theme variables
     this.theme = this._getRegionTheme(this.regionId);
   }
 
   create() {
-    logger.info(`🗺️ Phaser ExplorationScene loading region: ${this.regionId}`);
+    logger.info(`🗺️ Phaser ExplorationScene loading SEEDED region: ${this.regionId} | Seed: ${this.seed}`);
+
+    // Set world physics bounds for massive map scrolling
+    this.physics.world.setBounds(0, 0, TILE_SIZE * GRID_COLS, TILE_SIZE * GRID_ROWS);
 
     // Initialize EasyStar pathfinder
     this.easystar = new EasyStar.js();
     this.easystar.enableDiagonals();
     this.easystar.disableCornerCutting();
 
-    // 1. Generate grid and obstacles
+    // 1. Generate deterministic seeded grid, obstacles, and resources
     this._generateMapGrid();
 
-    // 2. Draw ground tiles and obstacles
+    // 2. Draw ground tiles and outline grid borders
     this._renderMapGraphics();
 
-    // 3. Spawn Interactive Items
+    // 3. Spawn deterministic interactive objects
     this._spawnPortal();
     this._spawnChests();
     this._spawnEnemies();
+    this._spawnSeededResources();
 
-    // 4. Spawn Player
+    // 4. Spawn Player Sprite
     this._spawnPlayer();
 
-    // 5. Initialize pathfinder grid
+    // 5. Configure camera properties (Smooth Minecraft-style camera follow!)
+    this.cameras.main.setBounds(0, 0, TILE_SIZE * GRID_COLS, TILE_SIZE * GRID_ROWS);
+    this.cameras.main.startFollow(this.playerSprite, true, 0.1, 0.1);
+    this.cameras.main.setZoom(1.0);
+
+    // 6. Initialize pathfinder grid
     this.easystar.setGrid(this.grid);
     this.easystar.setAcceptableTiles([0]);
 
-    // 6. Setup Inputs
+    // 7. Setup Inputs (WASD, Arrows, Space for Action Swing)
     this.cursors = this.input.keyboard.createCursorKeys();
     this.wasd = this.input.keyboard.addKeys({
       up: Phaser.Input.Keyboard.KeyCodes.W,
@@ -73,30 +101,54 @@ class ExplorationScene extends Phaser.Scene {
       left: Phaser.Input.Keyboard.KeyCodes.A,
       right: Phaser.Input.Keyboard.KeyCodes.D
     });
+    this.spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
 
-    // Map click handling for pathfinding
+    // Map click handling (Walk or Mine/Harvest adjacent resources)
     this.input.on('pointerdown', (pointer) => {
-      const clickedCol = Math.floor(pointer.x / TILE_SIZE);
-      const clickedRow = Math.floor(pointer.y / TILE_SIZE);
+      // Offset by camera scroll position to get accurate world coordinates
+      const worldX = pointer.x + this.cameras.main.scrollX;
+      const worldY = pointer.y + this.cameras.main.scrollY;
+
+      const clickedCol = Math.floor(worldX / TILE_SIZE);
+      const clickedRow = Math.floor(worldY / TILE_SIZE);
 
       if (this._isValidGridPos(clickedCol, clickedRow)) {
-        this._calculateAndMoveTo(clickedCol, clickedRow);
+        // If adjacent to player and clicked a resource node, trigger harvest!
+        const dx = Math.abs(this.playerGridPos.x - clickedCol);
+        const dy = Math.abs(this.playerGridPos.y - clickedRow);
+        const isAdjacent = (dx + dy === 1);
+
+        const resource = this.resources.find(r => r.gridX === clickedCol && r.gridY === clickedRow);
+        if (isAdjacent && resource) {
+          this._harvestResource(resource);
+        } else {
+          this._calculateAndMoveTo(clickedCol, clickedRow);
+        }
       }
     });
 
-    // Instructions display overlay
-    this.add.text(15, this.scale.height - 35, '⌨ WASD/Flechas: Mover | 🖱 Clic: Auto-Ruta | 🌀 Portal: Salir', {
+    // Instructions display overlay inside Phaser
+    this.add.text(15, this.scale.height - 35, '⌨ WASD: Mover | 🌌 Espacio: Craftear/Talar Recursos | 🖱 Clic: Auto-Ruta/Minar', {
       fontFamily: 'Outfit, sans-serif',
       fontSize: '13px',
-      color: '#e2e8f0',
-      backgroundColor: '#0f172aa0',
-      padding: { x: 8, y: 4 },
+      color: '#fbbf24',
+      backgroundColor: '#070a0fe0',
+      padding: { x: 10, y: 5 },
       borderRadius: 4
-    }).setDepth(100);
+    }).setScrollFactor(0).setDepth(200);
+
+    // Trigger initial HUD refresh
+    this.parentUI.updateSidebarHUD();
   }
 
   update(time, delta) {
     if (this.isMoving) return;
+
+    // Handle Spacebar to harvest any adjacent resources
+    if (Phaser.Input.Keyboard.JustDown(this.spaceKey)) {
+      this._harvestAdjacentResource();
+      return;
+    }
 
     // Check keyboard inputs for single-tile movement step
     let dx = 0;
@@ -112,84 +164,100 @@ class ExplorationScene extends Phaser.Scene {
       const nextY = this.playerGridPos.y + dy;
 
       if (this._isWalkable(nextX, nextY)) {
-        // Clear click path queue when using manual keyboard movement
-        this.moveQueue = [];
+        this.moveQueue = []; // Clear click path queue when moving manually
         this._movePlayerToTile(nextX, nextY);
       }
     } else if (this.moveQueue.length > 0) {
-      // Execute next step in path queue
       const nextStep = this.moveQueue.shift();
-      this._movePlayerToTile(nextStep.x, nextStep.y);
+      if (this._isWalkable(nextStep.x, nextStep.y)) {
+        this._movePlayerToTile(nextStep.x, nextStep.y);
+      } else {
+        this.moveQueue = []; // Cancel route if blocked in real time
+      }
     }
 
-    // Process EasyStar calculations
     this.easystar.calculate();
   }
 
-  // --- Map Generation Helpers ---
+  // --- Biome Configuration Systems ---
 
   _getRegionTheme(regionId) {
     switch (regionId) {
       case REGIONS.FOREST:
         return {
-          bg: 0x052e16,
+          bg: 0x022c22,
           gridBorder: 0x15803d,
-          obstacleEmoji: '🌲',
           groundColor: 0x064e3b,
-          monsterEmoji: '🐺'
+          obstacleEmoji: '🌲',
+          monsterEmoji: '🐺',
+          groundTiles: ['🌿', '🌱', '🍄', '🍀']
         };
       case REGIONS.CAVE:
         return {
-          bg: 0x1e1b4b,
+          bg: 0x0f0b24,
           gridBorder: 0x4338ca,
-          obstacleEmoji: '💎',
-          groundColor: 0x312e81,
-          monsterEmoji: '💀'
+          groundColor: 0x1e1b4b,
+          obstacleEmoji: '🪨',
+          monsterEmoji: '💀',
+          groundTiles: ['🪨', '🍄', '✨', '']
         };
       case REGIONS.MOUNTAIN:
         return {
-          bg: 0x1c1917,
+          bg: 0x141210,
           gridBorder: 0x57534e,
-          obstacleEmoji: '🪨',
           groundColor: 0x292524,
-          monsterEmoji: '🧙‍♂️'
+          obstacleEmoji: '🏔️',
+          monsterEmoji: '🧙‍♂️',
+          groundTiles: ['❄️', '🪨', '🌿', '']
         };
       case REGIONS.CASTLE:
         return {
-          bg: 0x450a0a,
+          bg: 0x2c0606,
           gridBorder: 0x991b1b,
+          groundColor: 0x450a0a,
           obstacleEmoji: '🧱',
-          groundColor: 0x7f1d1d,
-          monsterEmoji: '😈'
+          monsterEmoji: '😈',
+          groundTiles: ['🔥', '🧱', '💀', '']
         };
       case REGIONS.VILLAGE:
       default:
         return {
-          bg: 0x022c22,
+          bg: 0x042416,
           gridBorder: 0x047857,
-          obstacleEmoji: '🌳',
           groundColor: 0x065f46,
-          monsterEmoji: '👾'
+          obstacleEmoji: '🌳',
+          monsterEmoji: '👾',
+          groundTiles: ['🌸', '🌼', '🌱', '']
         };
     }
   }
 
+  // --- Seeded Procedural Map Generator (Minecraft style!) ---
+
   _generateMapGrid() {
-    // Generate base empty grid (outer borders blocked)
+    this.grid = [];
     for (let r = 0; r < GRID_ROWS; r++) {
       const row = [];
       for (let c = 0; c < GRID_COLS; c++) {
+        // Outer boundaries are blocked wall tiles
         const isBorder = (r === 0 || c === 0 || r === GRID_ROWS - 1 || c === GRID_COLS - 1);
         if (isBorder) {
-          row.push(1); // Wall
+          row.push(1);
         } else {
-          // 15% chance to place an obstacle, avoiding spawn, exit, and nearby spots
-          const isSpawn = (c === 1 && r === 1);
-          const isExit = (c === this.exitGridPos.x && r === this.exitGridPos.y);
-          if (!isSpawn && !isExit && Math.random() < 0.15) {
-            row.push(1); // Obstacle
+          // Prevent spawning obstacles in the safe spawn zone around (2,2) and portal (exit)
+          const isSpawnZone = (c >= 1 && c <= 4 && r >= 1 && r <= 4);
+          const isExitZone = (Math.abs(c - this.exitGridPos.x) <= 1 && Math.abs(r - this.exitGridPos.y) <= 1);
+
+          if (isSpawnZone || isExitZone) {
+            row.push(0);
           } else {
-            row.push(0); // Walkable ground
+            // 18% chance to spawn an immutable landscape obstacle block
+            const rand = this.chanceInstance.floating({ min: 0, max: 1 });
+            if (rand < 0.18) {
+              row.push(1);
+            } else {
+              row.push(0);
+            }
           }
         }
       }
@@ -200,60 +268,67 @@ class ExplorationScene extends Phaser.Scene {
   _renderMapGraphics() {
     const graphics = this.add.graphics();
 
-    // Render tile by tile
     for (let r = 0; r < GRID_ROWS; r++) {
       for (let c = 0; c < GRID_COLS; c++) {
         const x = c * TILE_SIZE;
         const y = r * TILE_SIZE;
 
-        // Draw ground card
         if (this.grid[r][c] === 0) {
-          graphics.fillStyle(this.theme.groundColor, 0.4);
+          graphics.fillStyle(this.theme.groundColor, 0.45);
           graphics.fillRect(x, y, TILE_SIZE, TILE_SIZE);
         } else {
-          graphics.fillStyle(this.theme.bg, 0.85);
+          graphics.fillStyle(this.theme.bg, 0.9);
           graphics.fillRect(x, y, TILE_SIZE, TILE_SIZE);
         }
 
-        // Draw thin grid border
-        graphics.lineStyle(1, this.theme.gridBorder, 0.25);
+        // Grid border lines
+        graphics.lineStyle(1, this.theme.gridBorder, 0.2);
         graphics.strokeRect(x, y, TILE_SIZE, TILE_SIZE);
 
-        // Place obstacle emoji texture if blocked (and not border)
         const isBorder = (r === 0 || c === 0 || r === GRID_ROWS - 1 || c === GRID_COLS - 1);
         if (this.grid[r][c] === 1) {
           const emoji = isBorder ? '🪵' : this.theme.obstacleEmoji;
           this.add.text(x + TILE_SIZE / 2, y + TILE_SIZE / 2, emoji, {
             fontSize: '24px'
           }).setOrigin(0.5);
+        } else {
+          // Soft decorative seeded ground textures
+          const cellChance = new Chance(this.seed + `_${c}_${r}`);
+          if (cellChance.floating({ min: 0, max: 1 }) < 0.12) {
+            const groundDecor = cellChance.pickone(this.theme.groundTiles);
+            if (groundDecor) {
+              this.add.text(x + TILE_SIZE / 2, y + TILE_SIZE / 2, groundDecor, {
+                fontSize: '14px',
+                alpha: 0.35
+              }).setOrigin(0.5);
+            }
+          }
         }
       }
     }
   }
 
-  // --- Entity Spawns ---
+  // --- Seeded Entity / Chest Spawning System ---
 
   _spawnPlayer() {
     const x = this.playerGridPos.x * TILE_SIZE + TILE_SIZE / 2;
     const y = this.playerGridPos.y * TILE_SIZE + TILE_SIZE / 2;
 
-    const hero = gameState.getPlayer();
     let classEmoji = '🛡️';
-    if (hero) {
-      if (hero.classType === 'archer') classEmoji = '🏹';
-      else if (hero.classType === 'mage') classEmoji = '🧙';
+    if (this.player) {
+      if (this.player.classType === 'archer') classEmoji = '🏹';
+      else if (this.player.classType === 'mage') classEmoji = '🧙';
     }
 
     this.playerSprite = this.add.text(x, y, classEmoji, {
       fontSize: '28px'
-    }).setOrigin(0.5).setDepth(10);
+    }).setOrigin(0.5).setDepth(20);
 
-    // Subtle breathing animation
     this.tweens.add({
       targets: this.playerSprite,
       scaleX: 1.15,
       scaleY: 0.9,
-      duration: 800,
+      duration: 850,
       yoyo: true,
       repeat: -1,
       ease: 'Sine.easeInOut'
@@ -268,21 +343,24 @@ class ExplorationScene extends Phaser.Scene {
       fontSize: '32px'
     }).setOrigin(0.5).setDepth(5);
 
-    // Spin animation
     this.tweens.add({
       targets: this.portalSprite,
       angle: 360,
-      duration: 3000,
+      duration: 3200,
       repeat: -1
     });
   }
 
   _spawnChests() {
-    // Spawn 2 chests randomly in walkable ground
+    // Deterministic seeded spawn for 3 treasure chests
+    let chestChance = new Chance(this.seed + '_chests');
     let spawned = 0;
-    while (spawned < 2) {
-      const col = Phaser.Math.Between(2, GRID_COLS - 2);
-      const row = Phaser.Math.Between(2, GRID_ROWS - 2);
+    let attempts = 0;
+
+    while (spawned < 3 && attempts < 50) {
+      attempts++;
+      const col = chestChance.integer({ min: 3, max: GRID_COLS - 4 });
+      const row = chestChance.integer({ min: 3, max: GRID_ROWS - 4 });
 
       if (this.grid[row][col] === 0 &&
           !(col === this.exitGridPos.x && row === this.exitGridPos.y) &&
@@ -291,13 +369,12 @@ class ExplorationScene extends Phaser.Scene {
         const x = col * TILE_SIZE + TILE_SIZE / 2;
         const y = row * TILE_SIZE + TILE_SIZE / 2;
 
-        const sprite = this.add.text(x, y, '🎁', { fontSize: '26px' }).setOrigin(0.5).setDepth(5);
-        
-        // Gentle hover float tween
+        const sprite = this.add.text(x, y, '🎁', { fontSize: '26px' }).setOrigin(0.5).setDepth(6);
+
         this.tweens.add({
           targets: sprite,
-          y: y - 4,
-          duration: 600 + Math.random() * 400,
+          y: y - 5,
+          duration: 650 + chestChance.random() * 400,
           yoyo: true,
           repeat: -1,
           ease: 'Sine.easeInOut'
@@ -314,11 +391,15 @@ class ExplorationScene extends Phaser.Scene {
   }
 
   _spawnEnemies() {
-    // Spawn 2 roaming enemies randomly
+    // Seeded spawn for 3 roaming dungeon monsters
+    let enemyChance = new Chance(this.seed + '_enemies');
     let spawned = 0;
-    while (spawned < 2) {
-      const col = Phaser.Math.Between(3, GRID_COLS - 3);
-      const row = Phaser.Math.Between(3, GRID_ROWS - 3);
+    let attempts = 0;
+
+    while (spawned < 3 && attempts < 50) {
+      attempts++;
+      const col = enemyChance.integer({ min: 4, max: GRID_COLS - 5 });
+      const row = enemyChance.integer({ min: 4, max: GRID_ROWS - 5 });
 
       if (this.grid[row][col] === 0 &&
           !(col === this.exitGridPos.x && row === this.exitGridPos.y) &&
@@ -328,7 +409,7 @@ class ExplorationScene extends Phaser.Scene {
         const x = col * TILE_SIZE + TILE_SIZE / 2;
         const y = row * TILE_SIZE + TILE_SIZE / 2;
 
-        const sprite = this.add.text(x, y, this.theme.monsterEmoji, { fontSize: '26px' }).setOrigin(0.5).setDepth(6);
+        const sprite = this.add.text(x, y, this.theme.monsterEmoji, { fontSize: '26px' }).setOrigin(0.5).setDepth(8);
 
         const enemyObj = {
           gridX: col,
@@ -337,9 +418,8 @@ class ExplorationScene extends Phaser.Scene {
           roamTimer: null
         };
 
-        // Standard roaming tick handler (moves every 2 seconds)
         enemyObj.roamTimer = this.time.addEvent({
-          delay: 2000 + Math.random() * 1000,
+          delay: 1800 + enemyChance.random() * 800,
           loop: true,
           callback: () => this._roamEnemy(enemyObj)
         });
@@ -350,7 +430,80 @@ class ExplorationScene extends Phaser.Scene {
     }
   }
 
-  // --- Movement & Interactivity core ---
+  // --- Seeded Sandbox Resources (Minecraft-style blocks!) ---
+
+  _spawnSeededResources() {
+    let resChance = new Chance(this.seed + '_resources');
+    
+    // Resource types mapping based on biome/region
+    const configByRegion = {
+      [REGIONS.VILLAGE]: [
+        { type: 'wood', emoji: '🪵', hp: 3, label: 'Roble' },
+        { type: 'stone', emoji: '🪨', hp: 4, label: 'Roca' },
+        { type: 'mushrooms', emoji: '🍄', hp: 2, label: 'Setas' }
+      ],
+      [REGIONS.FOREST]: [
+        { type: 'wood', emoji: '🪵', hp: 3, label: 'Pino' },
+        { type: 'iron', emoji: '🪨', hp: 5, label: 'Hierro' },
+        { type: 'mushrooms', emoji: '🍄', hp: 2, label: 'Hongo Rojo' }
+      ],
+      [REGIONS.CAVE]: [
+        { type: 'stone', emoji: '🪨', hp: 4, label: 'Carbón' },
+        { type: 'iron', emoji: '🪨', hp: 5, label: 'Hierro' },
+        { type: 'gems', emoji: '💎', hp: 6, label: 'Rubí' }
+      ],
+      [REGIONS.MOUNTAIN]: [
+        { type: 'stone', emoji: '🪨', hp: 4, label: 'Cobre' },
+        { type: 'iron', emoji: '🪨', hp: 5, label: 'Hierro' },
+        { type: 'gems', emoji: '💎', hp: 6, label: 'Zafiro' }
+      ],
+      [REGIONS.CASTLE]: [
+        { type: 'stone', emoji: '🪨', hp: 5, label: 'Obsidiana' },
+        { type: 'gems', emoji: '💎', hp: 7, label: 'Materia Fuego' }
+      ]
+    };
+
+    const availTypes = configByRegion[this.regionId] || configByRegion[REGIONS.VILLAGE];
+
+    // Distribute resources procedurally
+    for (let r = 2; r < GRID_ROWS - 2; r++) {
+      for (let c = 2; c < GRID_COLS - 2; c++) {
+        // Safe check so spawn zone and exit are safe
+        const isSpawnZone = (c >= 1 && c <= 4 && r >= 1 && r <= 4);
+        const isExitZone = (Math.abs(c - this.exitGridPos.x) <= 1 && Math.abs(r - this.exitGridPos.y) <= 1);
+        if (isSpawnZone || isExitZone) continue;
+
+        // If the cell is empty, roll to spawn a harvestable resource block
+        if (this.grid[r][c] === 0) {
+          const blockChance = new Chance(this.seed + `_res_${c}_${r}`);
+          if (blockChance.floating({ min: 0, max: 1 }) < 0.1) {
+            const template = blockChance.pickone(availTypes);
+            
+            // Mark grid cell as blocked so pathfinding calculates collision!
+            this.grid[r][c] = 1;
+
+            const x = c * TILE_SIZE + TILE_SIZE / 2;
+            const y = r * TILE_SIZE + TILE_SIZE / 2;
+
+            const sprite = this.add.text(x, y, template.emoji, { fontSize: '26px' }).setOrigin(0.5).setDepth(7);
+
+            this.resources.push({
+              gridX: c,
+              gridY: r,
+              type: template.type,
+              emoji: template.emoji,
+              label: template.label,
+              hp: template.hp,
+              maxHp: template.hp,
+              sprite: sprite
+            });
+          }
+        }
+      }
+    }
+  }
+
+  // --- Real-time Movement & Action Engine ---
 
   _isValidGridPos(col, row) {
     return col >= 0 && col < GRID_COLS && row >= 0 && row < GRID_ROWS;
@@ -369,10 +522,9 @@ class ExplorationScene extends Phaser.Scene {
       targetCol, targetRow,
       (path) => {
         if (path && path.length > 1) {
-          // Remove start node and queue path steps
           this.moveQueue = path.slice(1);
         } else {
-          audioManager.playSfx('hover', 0.1);
+          audioManager.playSfx('hover', 0.08);
         }
       }
     );
@@ -382,34 +534,31 @@ class ExplorationScene extends Phaser.Scene {
   _movePlayerToTile(targetCol, targetRow) {
     this.isMoving = true;
     
-    // Animate sprite hopping movement
     const targetX = targetCol * TILE_SIZE + TILE_SIZE / 2;
     const targetY = targetRow * TILE_SIZE + TILE_SIZE / 2;
 
-    audioManager.playSfx('hover', 0.08);
+    audioManager.playSfx('hover', 0.06);
 
-    // Slide and squash stretch
+    // Bounce squash-stretch walking animation (GSAP action frame style!)
     this.tweens.add({
       targets: this.playerSprite,
       x: targetX,
       y: targetY,
-      duration: 180,
+      duration: 160,
       ease: 'Power1.easeOut',
       onComplete: () => {
         this.playerGridPos.x = targetCol;
         this.playerGridPos.y = targetRow;
         this.isMoving = false;
 
-        // Check Triggers on arrival
         this._checkTriggers();
       }
     });
   }
 
   _roamEnemy(enemy) {
-    if (this.sys.isPaused()) return;
+    if (this.sys.isPaused() || !this.parentUI.gameInstance) return;
 
-    // Pick a random adjacent walkable tile
     const dirs = [
       { x: 0, y: -1 }, { x: 0, y: 1 },
       { x: -1, y: 0 }, { x: 1, y: 0 }
@@ -425,7 +574,8 @@ class ExplorationScene extends Phaser.Scene {
 
     if (validDirs.length === 0) return;
 
-    const dir = Phaser.Utils.Array.GetRandom(validDirs);
+    const pickChance = new Chance();
+    const dir = pickChance.pickone(validDirs);
     const nextX = enemy.gridX + dir.x;
     const nextY = enemy.gridY + dir.y;
 
@@ -436,10 +586,9 @@ class ExplorationScene extends Phaser.Scene {
       targets: enemy.sprite,
       x: nextX * TILE_SIZE + TILE_SIZE / 2,
       y: nextY * TILE_SIZE + TILE_SIZE / 2,
-      duration: 300,
+      duration: 350,
       ease: 'Power1.easeInOut',
       onComplete: () => {
-        // Check if enemy stepped into the player
         if (enemy.gridX === this.playerGridPos.x && enemy.gridY === this.playerGridPos.y) {
           this._triggerCombat();
         }
@@ -475,56 +624,53 @@ class ExplorationScene extends Phaser.Scene {
   _openChest(chest) {
     audioManager.playSfx('heal');
 
-    // Visual pop-up inside Phaser
-    const floatText = this.add.text(chest.sprite.x, chest.sprite.y - 10, '¡Cofre abierto!', {
+    const floatText = this.add.text(chest.sprite.x, chest.sprite.y - 12, '💎 ¡Cofre abierto! 💎', {
       fontFamily: 'Outfit, sans-serif',
       fontSize: '14px',
       color: '#fbbf24',
       fontStyle: 'bold'
     }).setOrigin(0.5);
 
-    // Fade out chest and float text
+    // Glowing explosion particles
+    this._emitParticles(chest.sprite.x, chest.sprite.y, 0xfbbf24, '✨');
+
     this.tweens.add({
       targets: chest.sprite,
       scaleX: 0,
       scaleY: 0,
-      angle: 90,
+      angle: 180,
       alpha: 0,
-      duration: 300,
+      duration: 350,
       onComplete: () => chest.sprite.destroy()
     });
 
     this.tweens.add({
       targets: floatText,
-      y: floatText.y - 30,
+      y: floatText.y - 40,
       alpha: 0,
-      duration: 1000,
+      duration: 1200,
       onComplete: () => floatText.destroy()
     });
 
-    // Pick a random event from MAP_DATA exploreEvents list to give actual rewards!
+    // Determine rewards from exploration list
     if (this.regionData.exploreEvents && this.regionData.exploreEvents.length > 0) {
-      const rollEvent = Phaser.Utils.Array.GetRandom(this.regionData.exploreEvents);
+      const rollEvent = this.chanceInstance.pickone(this.regionData.exploreEvents);
       
-      // Emit log messages for the user
       eventBus.emit(EVENTS.LOG_MESSAGE, {
-        text: `🎁 Cofre Encontrado: ${rollEvent.name} — ${rollEvent.description}`,
+        text: `🎁 Cofre Secreto: ${rollEvent.name} — ${rollEvent.description}`,
         type: 'quest'
       });
 
-      // Apply effect rewards directly
       const effect = rollEvent.effect;
-      const player = gameState.getPlayer();
-      if (player) {
-        if (effect.gold) player.gold += effect.gold;
+      if (this.player) {
+        if (effect.gold) this.player.gold += effect.gold;
         if (effect.healPercent) {
-          const hpGain = Math.floor(player.stats.maxHp * effect.healPercent);
-          player.hp = Math.min(player.hp + hpGain, player.stats.maxHp);
+          const hpGain = Math.floor(this.player.stats.maxHp * effect.healPercent);
+          this.player.hp = Math.min(this.player.hp + hpGain, this.player.stats.maxHp);
         }
         if (effect.giveItems && effect.giveItems.length > 0) {
-          // Add reward items directly into inventory via global gameEngine service
           effect.giveItems.forEach(loot => {
-            window.gameEngine.services.inventory.addItem(loot);
+            window.gameEngine.services.inventory.addItem(loot.itemId);
           });
         }
       }
@@ -541,12 +687,186 @@ class ExplorationScene extends Phaser.Scene {
     }
   }
 
+  // --- Minecraft Action Harvesting Engine ---
+
+  _harvestAdjacentResource() {
+    const px = this.playerGridPos.x;
+    const py = this.playerGridPos.y;
+
+    const adjacentDirs = [
+      { x: 0, y: -1 }, { x: 0, y: 1 },
+      { x: -1, y: 0 }, { x: 1, y: 0 }
+    ];
+
+    for (const dir of adjacentDirs) {
+      const targetCol = px + dir.x;
+      const targetRow = py + dir.y;
+      
+      const resource = this.resources.find(r => r.gridX === targetCol && r.gridY === targetRow);
+      if (resource) {
+        this._harvestResource(resource);
+        return;
+      }
+    }
+
+    // If no adjacent resource, emit minor alert sound
+    audioManager.playSfx('hover', 0.05);
+  }
+
+  _harvestResource(resource) {
+    if (!this.player) return;
+
+    // Action Tool level checks
+    const toolLevel = resource.type === 'wood' ? this.player.sandboxTools.axe : this.player.sandboxTools.pickaxe;
+    const chopPower = toolLevel; // doing damage based on tool tier!
+
+    resource.hp -= chopPower;
+
+    // Action Swing Tween (GSAP rotation bounce!)
+    this.tweens.add({
+      targets: this.playerSprite,
+      angle: 35,
+      scaleX: 1.25,
+      duration: 100,
+      yoyo: true,
+      ease: 'Back.easeOut'
+    });
+
+    // Shake the targeted resource node
+    this.tweens.add({
+      targets: resource.sprite,
+      x: resource.sprite.x + Phaser.Math.Between(-4, 4),
+      y: resource.sprite.y + Phaser.Math.Between(-2, 2),
+      duration: 50,
+      yoyo: true,
+      repeat: 2
+    });
+
+    // Emit impact particles
+    const particleColor = resource.type === 'wood' ? 0x92400e : (resource.type === 'gems' ? 0xec4899 : 0x6b7280);
+    const particleSymbol = resource.type === 'wood' ? '🍂' : (resource.type === 'gems' ? '✨' : '🪨');
+    this._emitParticles(resource.sprite.x, resource.sprite.y, particleColor, particleSymbol);
+
+    // Floating text showing hit feedback
+    const floatValText = this.add.text(resource.sprite.x, resource.sprite.y - 15, `-${chopPower} HP`, {
+      fontFamily: 'Outfit, sans-serif',
+      fontSize: '11px',
+      color: '#ef4444',
+      fontStyle: 'bold'
+    }).setOrigin(0.5);
+
+    this.tweens.add({
+      targets: floatValText,
+      y: floatValText.y - 20,
+      alpha: 0,
+      duration: 600,
+      onComplete: () => floatValText.destroy()
+    });
+
+    // Play mining SFX
+    audioManager.playSfx('hover', 0.15);
+
+    if (resource.hp <= 0) {
+      // Resource Node completely broken!
+      this._breakResource(resource);
+    }
+  }
+
+  _breakResource(resource) {
+    // Remove from array and restore grid cell to walkable ground!
+    const idx = this.resources.indexOf(resource);
+    if (idx !== -1) {
+      this.resources.splice(idx, 1);
+    }
+
+    // RESTORE WALKABLE PATH! (Block cleared!)
+    this.grid[resource.gridY][resource.gridX] = 0;
+    this.easystar.setGrid(this.grid); // recalculate grid bounds
+
+    // Award materials depending on resource type
+    let yieldAmount = this.chanceInstance.integer({ min: 2, max: 4 });
+    
+    if (resource.type === 'wood') {
+      this.player.sandboxMaterials.wood += yieldAmount;
+    } else if (resource.type === 'stone') {
+      this.player.sandboxMaterials.stone += yieldAmount;
+    } else if (resource.type === 'iron') {
+      this.player.sandboxMaterials.iron += yieldAmount;
+    } else if (resource.type === 'gems') {
+      this.player.sandboxMaterials.gems += yieldAmount;
+    }
+
+    // Play breaking audio feedback
+    audioManager.playSfx('heal');
+
+    const breakText = this.add.text(resource.sprite.x, resource.sprite.y - 12, `¡${resource.label} Destruido! +${yieldAmount}`, {
+      fontFamily: 'Outfit, sans-serif',
+      fontSize: '13px',
+      color: '#10b981',
+      fontStyle: 'bold'
+    }).setOrigin(0.5);
+
+    this.tweens.add({
+      targets: resource.sprite,
+      scaleX: 0,
+      scaleY: 0,
+      alpha: 0,
+      duration: 250,
+      onComplete: () => resource.sprite.destroy()
+    });
+
+    this.tweens.add({
+      targets: breakText,
+      y: breakText.y - 45,
+      alpha: 0,
+      duration: 1500,
+      onComplete: () => breakText.destroy()
+    });
+
+    // Logging console message
+    eventBus.emit(EVENTS.LOG_MESSAGE, {
+      text: `⛏️ Has recolectado ${yieldAmount} de ${resource.type.toUpperCase()} al talar el nodo de recurso.`,
+      type: 'reward'
+    });
+
+    // Refresh sandbox inventory and sidebar DOM
+    this.parentUI.updateSidebarHUD();
+  }
+
+  _emitParticles(x, y, color, char = '▪') {
+    for (let i = 0; i < 6; i++) {
+      const part = this.add.text(x, y, char, {
+        fontSize: '12px',
+        color: '#' + color.toString(16)
+      }).setOrigin(0.5);
+
+      const angle = Phaser.Math.Between(0, 360);
+      const rad = Phaser.Math.DegToRad(angle);
+      const dist = Phaser.Math.Between(15, 45);
+
+      const targetX = x + Math.cos(rad) * dist;
+      const targetY = y + Math.sin(rad) * dist;
+
+      this.tweens.add({
+        targets: part,
+        x: targetX,
+        y: targetY,
+        alpha: 0,
+        scale: 0.2,
+        angle: Phaser.Math.Between(-180, 180),
+        duration: 500 + Math.random() * 200,
+        onComplete: () => part.destroy()
+      });
+    }
+  }
+
+  // --- Core Combat and Victory Triggers ---
+
   _triggerCombat() {
     this.scene.pause();
     
-    // Close modal and initiate combat immediately
     const enemyPool = this.regionData.enemies || ['dummy'];
-    const chosenEnemy = Phaser.Utils.Array.GetRandom(enemyPool);
+    const chosenEnemy = this.chanceInstance.pickone(enemyPool);
 
     audioManager.playSfx('defeat');
 
@@ -555,10 +875,7 @@ class ExplorationScene extends Phaser.Scene {
       type: 'combat'
     });
 
-    // Close the exploration container frame
     this.parentUI.close();
-
-    // Trigger full combat scene transition on GameEngine
     eventBus.emit(EVENTS.COMBAT_START, { enemyId: chosenEnemy });
   }
 
@@ -571,10 +888,9 @@ class ExplorationScene extends Phaser.Scene {
       type: 'reward'
     });
 
-    const player = gameState.getPlayer();
-    if (player) {
-      player.exp += 20;
-      window.gameEngine.services.inventory.checkLevelUp(player);
+    if (this.player) {
+      this.player.exp += 20;
+      window.gameEngine.services.inventory.checkLevelUp(this.player);
     }
 
     eventBus.emit(EVENTS.TOAST_SHOW, {
@@ -582,7 +898,6 @@ class ExplorationScene extends Phaser.Scene {
       type: 'gold'
     });
 
-    // Fade out and close
     this.parentUI.close();
   }
 }
@@ -590,41 +905,154 @@ class ExplorationScene extends Phaser.Scene {
 export class ExplorationMapUI {
   constructor() {
     this.gameInstance = null;
+    this.recipes = [
+      {
+        id: 'recipe_potion_hp',
+        name: 'Poción Menor de Vida 🧪',
+        description: 'Restaura 30 HP de inmediato',
+        itemId: 'potion_hp_minor',
+        cost: { wood: 2, stone: 0, iron: 0, gems: 0 }
+      },
+      {
+        id: 'recipe_potion_mp',
+        name: 'Poción Menor de Maná 🧪',
+        description: 'Restaura 15 PM de inmediato',
+        itemId: 'potion_mp_minor',
+        cost: { wood: 0, stone: 2, iron: 0, gems: 0 }
+      },
+      {
+        id: 'recipe_shield_wood',
+        name: 'Escudo de Madera 🛡️',
+        description: 'Escudo de inicio (+3 Defensa)',
+        itemId: 'shield_wooden',
+        cost: { wood: 5, stone: 0, iron: 0, gems: 0 }
+      },
+      {
+        id: 'recipe_sword_iron',
+        name: 'Espada de Hierro ⚔️',
+        description: 'Arma sólida (+10 Ataque)',
+        itemId: 'weapon_iron_sword',
+        cost: { wood: 8, stone: 5, iron: 3, gems: 0 }
+      },
+      {
+        id: 'recipe_ring_copper',
+        name: 'Anillo de Cobre 💍',
+        description: 'Accesorio sencillo (+5 HP)',
+        itemId: 'accessory_copper_ring',
+        cost: { wood: 0, stone: 6, iron: 2, gems: 1 }
+      },
+      {
+        id: 'recipe_ring_life',
+        name: 'Anillo de Vitalidad 💍',
+        description: 'Grabado épico (+40 HP, +2 Def)',
+        itemId: 'accessory_ring_of_life',
+        cost: { wood: 0, stone: 15, iron: 5, gems: 6 }
+      }
+    ];
   }
 
   /**
-   * Instantiate and open the visual Phaser 2D modal
+   * Instantiate and open the visual Phaser 2D modal with sidebar crafting
    */
   open() {
     const regionId = gameState.get('currentRegion');
     const region = MAP_DATA[regionId];
 
-    // Play BGM for region
+    // Ensure seed is set
+    let currentSeed = gameState.get('currentSeed');
+    if (!currentSeed) {
+      currentSeed = Math.floor(100000 + Math.random() * 900000).toString();
+      gameState.set('currentSeed', currentSeed);
+    }
+
     audioManager.playSfx('hover');
 
-    // 1. Create Modal Container DOM element
+    // 1. Create Modal Container DOM element supporting Sandbox Grid Layout
     const overlay = document.createElement('div');
     overlay.id = 'exploration-overlay';
     overlay.className = 'exploration-overlay';
     overlay.innerHTML = `
-      <div class="exploration-modal-card">
+      <div class="exploration-modal-card" style="max-width: 1100px;">
         <header class="exploration-modal-header">
-          <div class="modal-title font-display">🗺️ Explorando: ${region.name}</div>
+          <div class="modal-title font-display">🗺️ Explorando Aventura: ${region.name}</div>
           <button id="btn-exploration-exit" class="btn btn-danger btn-sm">Retirarse 🚪</button>
         </header>
-        <div id="phaser-canvas-container" class="phaser-canvas-container"></div>
+        
+        <div class="exploration-sandbox-container">
+          <!-- Left side: Phaser viewport -->
+          <div id="phaser-canvas-container" class="phaser-canvas-container"></div>
+          
+          <!-- Right side: premium Sandbox Crafting Sidebar -->
+          <aside class="sandbox-sidebar">
+            <div class="sandbox-section">
+              <h4 class="section-title">🌱 Generación de Mundo</h4>
+              <div class="seed-control-group">
+                <input type="text" id="sandbox-seed-input" class="font-mono" value="${currentSeed}" />
+                <button id="btn-sandbox-regenerate" class="btn btn-gold btn-xxs">Regenerar 🌀</button>
+              </div>
+              <div class="text-xxs text-muted" style="margin-top: 5px; opacity: 0.6;">Modificar semilla cambiará por completo la distribución del terreno.</div>
+            </div>
+
+            <div class="sandbox-section">
+              <h4 class="section-title">🎒 Materiales de Aventura</h4>
+              <div class="sandbox-materials-grid">
+                <div class="material-chip">
+                  <span class="material-icon">🪵</span>
+                  <span class="material-label">Madera</span>
+                  <span id="mat-wood-count" class="material-count font-mono">0</span>
+                </div>
+                <div class="material-chip">
+                  <span class="material-icon">🪨</span>
+                  <span class="material-label">Piedra</span>
+                  <span id="mat-stone-count" class="material-count font-mono">0</span>
+                </div>
+                <div class="material-chip">
+                  <span class="material-icon">⛏️</span>
+                  <span class="material-label">Hierro</span>
+                  <span id="mat-iron-count" class="material-count font-mono">0</span>
+                </div>
+                <div class="material-chip">
+                  <span class="material-icon">💎</span>
+                  <span class="material-label">Gemas</span>
+                  <span id="mat-gems-count" class="material-count font-mono">0</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="sandbox-section">
+              <h4 class="section-title">🪓 Herramientas</h4>
+              <div class="sandbox-tools-list">
+                <div class="tool-item">
+                  <div>🪓 Hacha: <span id="tool-axe-level" class="text-gold" style="font-weight:bold;">Nvl. 1</span></div>
+                  <button id="btn-upgrade-axe" class="btn btn-secondary btn-xxs">Mejorar (8🪵 4🪨)</button>
+                </div>
+                <div class="tool-item" style="margin-top: 5px">
+                  <div>⛏️ Pico: <span id="tool-pickaxe-level" class="text-gold" style="font-weight:bold;">Nvl. 1</span></div>
+                  <button id="btn-upgrade-pickaxe" class="btn btn-secondary btn-xxs">Mejorar (8🪵 8🪨)</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="sandbox-section" style="flex: 1; display: flex; flex-direction: column;">
+              <h4 class="section-title">🛠️ Mesa de Forja & Alquimia</h4>
+              <div id="crafting-recipes-list" class="crafting-recipes-list">
+                <!-- Crafting recipes dynamically built -->
+              </div>
+            </div>
+          </aside>
+        </div>
       </div>
     `;
 
     document.body.appendChild(overlay);
 
-    // 2. Load Phaser Game Instance
+    // 2. Load Phaser Game Instance (Using 720x528 screen, displaying scrollable views of 36x28 world)
     const config = {
       type: Phaser.AUTO,
-      width: TILE_SIZE * GRID_COLS,
-      height: TILE_SIZE * GRID_ROWS,
+      width: 720,
+      height: 528,
       parent: 'phaser-canvas-container',
-      backgroundColor: '#0d1117',
+      backgroundColor: '#05080c',
       scene: ExplorationScene,
       physics: {
         default: 'arcade',
@@ -632,23 +1060,238 @@ export class ExplorationMapUI {
       }
     };
 
-    // Instantiate game and pass contextual data
     this.gameInstance = new Phaser.Game(config);
     this.gameInstance.scene.start('ExplorationScene', {
       regionId: regionId,
       parentUI: this
     });
 
-    // Bind Retirarse Exit Click
+    // 3. Bind Event Listeners
     const btnExit = document.getElementById('btn-exploration-exit');
     if (btnExit) {
       btnExit.addEventListener('click', () => {
-        logger.info('🚪 Player retired manually from exploration');
+        logger.info('🚪 Player retired manually from sandbox adventure');
         eventBus.emit(EVENTS.LOG_MESSAGE, {
           text: 'Te retiras de la exploración y regresas a la zona segura.',
           type: 'system'
         });
         this.close();
+      });
+    }
+
+    const btnRegen = document.getElementById('btn-sandbox-regenerate');
+    if (btnRegen) {
+      btnRegen.addEventListener('click', () => {
+        const inputSeed = document.getElementById('sandbox-seed-input');
+        if (inputSeed && inputSeed.value) {
+          const newSeed = inputSeed.value.trim();
+          gameState.set('currentSeed', newSeed);
+          logger.info(`Regenerating world with custom seed: ${newSeed}`);
+          
+          eventBus.emit(EVENTS.TOAST_SHOW, {
+            message: '🌀 Generando nuevo mundo procedimental...',
+            type: 'gold'
+          });
+
+          // Safely restart current phaser scene with new seed
+          if (this.gameInstance) {
+            const activeScene = this.gameInstance.scene.getScene('ExplorationScene');
+            if (activeScene) {
+              activeScene.scene.restart({
+                regionId: regionId,
+                parentUI: this
+              });
+            }
+          }
+        }
+      });
+    }
+
+    const btnUpgradeAxe = document.getElementById('btn-upgrade-axe');
+    if (btnUpgradeAxe) {
+      btnUpgradeAxe.addEventListener('click', () => this.upgradeTool('axe'));
+    }
+
+    const btnUpgradePickaxe = document.getElementById('btn-upgrade-pickaxe');
+    if (btnUpgradePickaxe) {
+      btnUpgradePickaxe.addEventListener('click', () => this.upgradeTool('pickaxe'));
+    }
+  }
+
+  /**
+   * Upgrade exploration gathering tool tiers
+   */
+  upgradeTool(toolType) {
+    const player = gameState.getPlayer();
+    if (!player) return;
+
+    const materials = player.sandboxMaterials;
+    const tools = player.sandboxTools;
+
+    const woodCost = 8 * tools[toolType];
+    const stoneCost = 4 * tools[toolType] * (toolType === 'pickaxe' ? 2 : 1);
+
+    if (materials.wood >= woodCost && materials.stone >= stoneCost) {
+      materials.wood -= woodCost;
+      materials.stone -= stoneCost;
+      tools[toolType] += 1;
+
+      audioManager.playSfx('heal');
+      eventBus.emit(EVENTS.TOAST_SHOW, {
+        message: `🪓 ¡${toolType === 'axe' ? 'Hacha' : 'Pico'} mejorado a Nivel ${tools[toolType]}!`,
+        type: 'success'
+      });
+
+      eventBus.emit(EVENTS.LOG_MESSAGE, {
+        text: `🛠️ Has mejorado tu ${toolType === 'axe' ? 'Hacha' : 'Pico'} de Aventura al Nivel ${tools[toolType]}. Ahora causa más daño al recolectar!`,
+        type: 'reward'
+      });
+
+      this.updateSidebarHUD();
+    } else {
+      audioManager.playSfx('hover', 0.1);
+      eventBus.emit(EVENTS.TOAST_SHOW, {
+        message: '❌ ¡Recursos insuficientes!',
+        type: 'error'
+      });
+    }
+  }
+
+  /**
+   * Craft items using materials and sync with central player inventory
+   */
+  craftItem(recipeId) {
+    const player = gameState.getPlayer();
+    if (!player) return;
+
+    const recipe = this.recipes.find(r => r.id === recipeId);
+    if (!recipe) return;
+
+    const materials = player.sandboxMaterials;
+    const cost = recipe.cost;
+
+    if (
+      materials.wood >= cost.wood &&
+      materials.stone >= cost.stone &&
+      materials.iron >= cost.iron &&
+      materials.gems >= cost.gems
+    ) {
+      // Deduct materials
+      materials.wood -= cost.wood;
+      materials.stone -= cost.stone;
+      materials.iron -= cost.iron;
+      materials.gems -= cost.gems;
+
+      // Inject actual items into active global inventory!
+      const itemInfo = ITEM_DATA[recipe.itemId];
+      if (itemInfo) {
+        player.inventory.push({
+          ...itemInfo,
+          id: Math.random().toString(36).substring(2, 9),
+          quantity: 1
+        });
+
+        audioManager.playSfx('heal');
+        eventBus.emit(EVENTS.TOAST_SHOW, {
+          message: `🛠️ ¡Crafteado: ${itemInfo.name}!`,
+          type: 'success'
+        });
+
+        eventBus.emit(EVENTS.LOG_MESSAGE, {
+          text: `🔨 Has forjado ${itemInfo.name} exitosamente usando tus materiales recolectados. Añadido a tu bolsa.`,
+          type: 'reward'
+        });
+      }
+
+      this.updateSidebarHUD();
+    } else {
+      audioManager.playSfx('hover', 0.1);
+      eventBus.emit(EVENTS.TOAST_SHOW, {
+        message: '❌ ¡Materiales insuficientes!',
+        type: 'error'
+      });
+    }
+  }
+
+  /**
+   * Sync active DOM counts, upgraded tools, and recipes
+   */
+  updateSidebarHUD() {
+    const player = gameState.getPlayer();
+    if (!player) return;
+
+    const materials = player.sandboxMaterials || { wood: 0, stone: 0, iron: 0, gems: 0 };
+    const tools = player.sandboxTools || { axe: 1, pickaxe: 1 };
+
+    // Update material counts
+    const txtWood = document.getElementById('mat-wood-count');
+    const txtStone = document.getElementById('mat-stone-count');
+    const txtIron = document.getElementById('mat-iron-count');
+    const txtGems = document.getElementById('mat-gems-count');
+
+    if (txtWood) txtWood.innerText = materials.wood;
+    if (txtStone) txtStone.innerText = materials.stone;
+    if (txtIron) txtIron.innerText = materials.iron;
+    if (txtGems) txtGems.innerText = materials.gems;
+
+    // Update tool descriptions
+    const lblAxe = document.getElementById('tool-axe-level');
+    const lblPick = document.getElementById('tool-pickaxe-level');
+    const btnAxe = document.getElementById('btn-upgrade-axe');
+    const btnPick = document.getElementById('btn-upgrade-pickaxe');
+
+    if (lblAxe) lblAxe.innerText = `Nvl. ${tools.axe} (Daño: ${tools.axe})`;
+    if (lblPick) lblPick.innerText = `Nvl. ${tools.pickaxe} (Daño: ${tools.pickaxe})`;
+
+    const axeWoodCost = 8 * tools.axe;
+    const axeStoneCost = 4 * tools.axe;
+    if (btnAxe) btnAxe.innerText = `Mejorar (${axeWoodCost}🪵 ${axeStoneCost}🪨)`;
+
+    const pickWoodCost = 8 * tools.pickaxe;
+    const pickStoneCost = 8 * tools.pickaxe;
+    if (btnPick) btnPick.innerText = `Mejorar (${pickWoodCost}🪵 ${pickStoneCost}🪨)`;
+
+    // Update and render recipe cards
+    const recipeContainer = document.getElementById('crafting-recipes-list');
+    if (recipeContainer) {
+      let html = '';
+      this.recipes.forEach(recipe => {
+        const canCraft = (
+          materials.wood >= recipe.cost.wood &&
+          materials.stone >= recipe.cost.stone &&
+          materials.iron >= recipe.cost.iron &&
+          materials.gems >= recipe.cost.gems
+        );
+
+        let costParts = [];
+        if (recipe.cost.wood > 0) costParts.push(`${recipe.cost.wood}🪵`);
+        if (recipe.cost.stone > 0) costParts.push(`${recipe.cost.stone}🪨`);
+        if (recipe.cost.iron > 0) costParts.push(`${recipe.cost.iron}⛏️`);
+        if (recipe.cost.gems > 0) costParts.push(`${recipe.cost.gems}💎`);
+        const costStr = costParts.join(' ') || 'Gratis';
+
+        html += `
+          <div class="recipe-card ${canCraft ? 'craftable' : ''}">
+            <div class="recipe-header">
+              <span class="recipe-name">${recipe.name}</span>
+              <button class="btn btn-gold btn-xxs btn-craft" data-recipe="${recipe.id}" ${canCraft ? '' : 'disabled'}>
+                Forjar 🛠️
+              </button>
+            </div>
+            <div class="recipe-desc">${recipe.description}</div>
+            <div class="recipe-costs">Costo: ${costStr}</div>
+          </div>
+        `;
+      });
+      recipeContainer.innerHTML = html;
+
+      // Bind crafting actions
+      const craftBtns = recipeContainer.querySelectorAll('.btn-craft');
+      craftBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+          const recipeId = btn.getAttribute('data-recipe');
+          this.craftItem(recipeId);
+        });
       });
     }
   }

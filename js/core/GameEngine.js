@@ -84,12 +84,26 @@ class GameEngine {
     });
   }
 
-  /**
-   * Load saved game
-   */
   async loadGame() {
     const success = await this.services.save.load();
     if (success) {
+      // Synchronize region unlocks with quest progress and flags in case old save loaded
+      const tracking = gameState.get('questsTracking');
+      if (tracking) {
+        if (tracking['quest_main_1'] && tracking['quest_main_1'].status !== 'available') {
+          gameState.unlockRegion('bosque-sombrio');
+        }
+      }
+      if (gameState.getFlag('unlocked_cueva')) {
+        gameState.unlockRegion('cueva-cristalina');
+      }
+      if (gameState.getFlag('unlocked_montana')) {
+        gameState.unlockRegion('montana-tormenta');
+      }
+      if (gameState.getFlag('unlocked_castillo')) {
+        gameState.unlockRegion('castillo-oscuro');
+      }
+
       this._startAutoSave();
       gameState.setScreen(SCREENS.GAME);
       eventBus.emit(EVENTS.LOG_MESSAGE, {

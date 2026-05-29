@@ -11,6 +11,7 @@ import { DIALOGUE_DATA } from '../data/dialogues.js';
 import { NPC_DATA } from '../data/npcs.js';
 import { QUEST_DATA } from '../data/quests.js';
 import { audioManager } from '../services/AudioManager.js';
+import { CHARACTER_IMAGES } from '../data/images.js';
 
 export class DialogUI {
   constructor() {
@@ -82,13 +83,18 @@ export class DialogUI {
       `;
     });
 
+    const base64Img = CHARACTER_IMAGES[this.npcId];
+    const avatarHtml = base64Img 
+      ? `<div class="npc-portrait-container"><img src="data:image/png;base64,${base64Img}" class="npc-portrait-img" alt="${npc.name}"></div>`
+      : `<span style="font-size:3.5rem">${npc.icon}</span>`;
+
     container.innerHTML = `
       <div class="screen-menu" style="background: radial-gradient(ellipse at 50% 100%, rgba(59, 130, 246, 0.12) 0%, transparent 60%), var(--color-bg-primary)">
         <div class="card dialogue-card" style="max-width: 600px; width: 100%; display:flex; flex-direction:column; gap:20px; padding:30px">
           
           <!-- Header NPC identity -->
           <div style="display:flex; align-items:center; gap:15px; border-bottom:1px solid var(--color-border); padding-bottom:15px">
-            <span style="font-size:3.5rem">${npc.icon}</span>
+            ${avatarHtml}
             <div>
               <h3 class="text-gold font-display" style="font-size:1.4rem">${npc.name}</h3>
               <span class="text-xs text-muted" style="text-transform:uppercase">${npc.role.replace('_', ' ')}</span>
