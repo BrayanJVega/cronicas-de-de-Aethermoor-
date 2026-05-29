@@ -1,0 +1,172 @@
+/* ============================================
+   COMBAT PAGE — Turn-based battle screen
+   ============================================ */
+
+.screen-combat {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: radial-gradient(ellipse at 50% 0%, rgba(239, 68, 68, 0.08) 0%, transparent 50%),
+              var(--color-bg-primary);
+}
+
+.combat-arena {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  max-width: var(--max-width-game);
+  margin: 0 auto;
+  width: 100%;
+  padding: var(--space-4);
+}
+
+/* Combatants area */
+.combat-field {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-8) var(--space-4);
+  flex: 1;
+}
+
+/* Fighter panel */
+.fighter-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  width: 40%;
+  max-width: 280px;
+}
+
+.fighter-sprite {
+  width: 120px;
+  height: 120px;
+  border-radius: var(--radius-xl);
+  background: var(--color-bg-tertiary);
+  border: 2px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 3.5rem;
+  transition: all var(--transition-base);
+}
+
+.fighter-sprite.attacking {
+  animation: attack-bounce 0.4s ease;
+}
+
+.fighter-sprite.hit {
+  animation: shake 0.4s ease;
+}
+
+.fighter-sprite.player-sprite {
+  border-color: var(--color-accent-blue);
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.2);
+}
+
+.fighter-sprite.enemy-sprite {
+  border-color: var(--color-accent-red);
+  box-shadow: 0 0 20px rgba(239, 68, 68, 0.2);
+}
+
+.fighter-name {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: var(--font-weight-semibold);
+}
+
+.fighter-level {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.fighter-bars {
+  width: 100%;
+}
+
+.fighter-status {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.status-badge {
+  font-size: var(--text-xs);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+  font-weight: var(--font-weight-medium);
+}
+
+.status-poison { background: rgba(34, 197, 94, 0.2); color: var(--color-status-poison); }
+.status-burn { background: rgba(239, 68, 68, 0.2); color: var(--color-status-burn); }
+.status-freeze { background: rgba(6, 182, 212, 0.2); color: var(--color-status-freeze); }
+.status-stun { background: rgba(234, 179, 8, 0.2); color: var(--color-status-stun); }
+
+/* VS divider */
+.combat-vs {
+  font-family: var(--font-display);
+  font-size: var(--text-3xl);
+  color: var(--color-accent-red);
+  font-weight: var(--font-weight-bold);
+  text-shadow: 0 0 20px rgba(239, 68, 68, 0.5);
+}
+
+/* Combat actions */
+.combat-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--color-bg-secondary);
+  border-top: 1px solid var(--color-border);
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+}
+
+/* Combat log */
+.combat-log {
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-bg-tertiary);
+  border-top: 1px solid var(--color-border);
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+/* Damage numbers */
+.damage-popup {
+  position: absolute;
+  font-weight: var(--font-weight-bold);
+  font-size: var(--text-xl);
+  color: var(--color-accent-red);
+  pointer-events: none;
+  animation: damage-float 1s ease-out forwards;
+}
+
+.damage-popup.critical {
+  font-size: var(--text-2xl);
+  color: var(--color-accent-gold);
+}
+
+.damage-popup.heal {
+  color: var(--color-accent-green);
+}
+
+@keyframes attack-bounce {
+  0% { transform: translateX(0); }
+  30% { transform: translateX(30px); }
+  60% { transform: translateX(-5px); }
+  100% { transform: translateX(0); }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-8px); }
+  40% { transform: translateX(8px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(4px); }
+}
+
+@keyframes damage-float {
+  0% { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateY(-60px) scale(1.3); }
+}

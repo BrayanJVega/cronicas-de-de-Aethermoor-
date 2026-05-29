@@ -1,0 +1,147 @@
+/* ============================================
+   MENU PAGE — Main menu & character creation
+   ============================================ */
+
+.screen-menu {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(ellipse at 50% 30%, rgba(139, 92, 246, 0.1) 0%, transparent 60%),
+              radial-gradient(ellipse at 80% 80%, rgba(59, 130, 246, 0.08) 0%, transparent 50%),
+              var(--color-bg-primary);
+  padding: var(--space-8);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Animated particles background */
+.screen-menu::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(1px 1px at 20% 30%, rgba(255,255,255,0.3), transparent),
+    radial-gradient(1px 1px at 40% 70%, rgba(255,255,255,0.2), transparent),
+    radial-gradient(1px 1px at 60% 20%, rgba(255,255,255,0.3), transparent),
+    radial-gradient(1px 1px at 80% 60%, rgba(255,255,255,0.15), transparent),
+    radial-gradient(2px 2px at 10% 80%, rgba(139, 92, 246, 0.4), transparent),
+    radial-gradient(2px 2px at 90% 10%, rgba(59, 130, 246, 0.3), transparent);
+  animation: twinkle 8s ease-in-out infinite alternate;
+}
+
+@keyframes twinkle {
+  0% { opacity: 0.5; }
+  100% { opacity: 1; }
+}
+
+.menu-title {
+  font-family: var(--font-display);
+  font-size: clamp(2.5rem, 8vw, 4.5rem);
+  font-weight: var(--font-weight-bold);
+  background: linear-gradient(135deg, var(--color-accent-gold-light), var(--color-accent-gold), #d97706);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-align: center;
+  margin-bottom: var(--space-2);
+  position: relative;
+  z-index: 1;
+  text-shadow: none;
+  filter: drop-shadow(0 0 20px rgba(245, 158, 11, 0.3));
+}
+
+.menu-subtitle {
+  font-size: var(--text-lg);
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-12);
+  text-align: center;
+  position: relative;
+  z-index: 1;
+}
+
+.menu-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  width: 100%;
+  max-width: 320px;
+  position: relative;
+  z-index: 1;
+}
+
+/* Character Creation */
+.screen-creation {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--space-8);
+  background: var(--color-bg-primary);
+}
+
+.creation-header {
+  text-align: center;
+  margin-bottom: var(--space-8);
+}
+
+.creation-form {
+  width: 100%;
+  max-width: 800px;
+}
+
+.creation-input-group {
+  margin-bottom: var(--space-6);
+}
+
+.creation-label {
+  display: block;
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-2);
+}
+
+.creation-input {
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  color: var(--color-text-primary);
+  font-size: var(--text-base);
+  transition: border-color var(--transition-fast);
+}
+
+.creation-input:focus {
+  outline: none;
+  border-color: var(--color-accent-gold);
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.15);
+}
+
+.class-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-4);
+  margin-bottom: var(--space-8);
+}
+
+.class-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.stat-row {
+  display: flex;
+  justify-content: space-between;
+}
+
+.stat-value {
+  color: var(--color-accent-gold);
+  font-weight: var(--font-weight-semibold);
+}

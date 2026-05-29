@@ -1,0 +1,173 @@
+/* ============================================
+   SHOP PAGE — Buy/sell interface
+   ============================================ */
+
+.screen-shop {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg-primary);
+  padding: var(--space-4);
+}
+
+.shop-header {
+  text-align: center;
+  padding: var(--space-4) 0;
+}
+
+.shop-npc {
+  font-size: 3rem;
+  margin-bottom: var(--space-2);
+}
+
+.shop-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+  max-width: var(--max-width-game);
+  margin: 0 auto;
+  width: 100%;
+  flex: 1;
+}
+
+.shop-panel {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  padding: var(--space-4);
+  overflow-y: auto;
+  max-height: 70vh;
+}
+
+.shop-panel-title {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  color: var(--color-text-heading);
+  margin-bottom: var(--space-4);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.shop-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.shop-item:hover {
+  background: var(--color-bg-tertiary);
+}
+
+.shop-item-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  background: var(--color-bg-tertiary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-xl);
+  flex-shrink: 0;
+}
+
+.shop-item-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.shop-item-name {
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+}
+
+.shop-item-desc {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.shop-item-price {
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-accent-gold);
+  white-space: nowrap;
+}
+
+/* Inventory grid */
+.inventory-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
+  gap: var(--space-2);
+}
+
+.inventory-slot {
+  aspect-ratio: 1;
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-xl);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  position: relative;
+}
+
+.inventory-slot:hover {
+  border-color: var(--color-border-hover);
+  background: rgba(59, 130, 246, 0.05);
+}
+
+.inventory-slot.equipped {
+  border-color: var(--color-accent-gold);
+  background: rgba(245, 158, 11, 0.08);
+}
+
+.inventory-slot .item-count {
+  position: absolute;
+  bottom: 2px;
+  right: 4px;
+  font-size: 0.6rem;
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-primary);
+}
+
+/* Tooltip */
+.tooltip {
+  position: absolute;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-3) var(--space-4);
+  min-width: 200px;
+  z-index: var(--z-tooltip);
+  box-shadow: var(--shadow-lg);
+  pointer-events: none;
+}
+
+.tooltip-name {
+  font-weight: var(--font-weight-semibold);
+  margin-bottom: var(--space-1);
+}
+
+.tooltip-rarity {
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: var(--space-2);
+}
+
+.tooltip-stats {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+@media (max-width: 768px) {
+  .shop-layout {
+    grid-template-columns: 1fr;
+  }
+}

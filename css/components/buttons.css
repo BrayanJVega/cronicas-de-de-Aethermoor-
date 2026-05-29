@@ -1,0 +1,127 @@
+/* ============================================
+   BUTTONS — All button variants
+   ============================================ */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-6);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-semibold);
+  border-radius: var(--radius-lg);
+  border: 1px solid transparent;
+  transition: all var(--transition-base);
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+  overflow: hidden;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.btn:active {
+  transform: scale(0.97);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Primary — Gold accent */
+.btn-primary {
+  background: linear-gradient(135deg, var(--color-accent-gold), #d97706);
+  color: #0a0e17;
+  box-shadow: var(--shadow-md), var(--shadow-glow-gold);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, var(--color-accent-gold-light), var(--color-accent-gold));
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg), 0 0 30px rgba(245, 158, 11, 0.4);
+}
+
+/* Secondary — Blue accent */
+.btn-secondary {
+  background: linear-gradient(135deg, var(--color-accent-blue), #2563eb);
+  color: #fff;
+  box-shadow: var(--shadow-md), var(--shadow-glow-blue);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: linear-gradient(135deg, var(--color-accent-blue-light), var(--color-accent-blue));
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg), 0 0 30px rgba(59, 130, 246, 0.4);
+}
+
+/* Danger — Red */
+.btn-danger {
+  background: linear-gradient(135deg, var(--color-accent-red), #dc2626);
+  color: #fff;
+}
+
+.btn-danger:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg), 0 0 20px rgba(239, 68, 68, 0.3);
+}
+
+/* Ghost — Transparent with border */
+.btn-ghost {
+  background: transparent;
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
+}
+
+.btn-ghost:hover:not(:disabled) {
+  background: var(--color-bg-glass);
+  border-color: var(--color-border-hover);
+}
+
+/* Sizes */
+.btn-sm {
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-xs);
+}
+
+.btn-lg {
+  padding: var(--space-4) var(--space-8);
+  font-size: var(--text-base);
+}
+
+.btn-xl {
+  padding: var(--space-5) var(--space-10);
+  font-size: var(--text-lg);
+  border-radius: var(--radius-xl);
+}
+
+/* Full width */
+.btn-block {
+  width: 100%;
+}
+
+/* Icon button */
+.btn-icon {
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  aspect-ratio: 1;
+}
+
+/* Ripple effect via pseudo-element */
+.btn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle, rgba(255,255,255,0.3) 0%, transparent 70%);
+  opacity: 0;
+  transform: scale(0);
+  transition: transform 0.5s, opacity 0.3s;
+}
+
+.btn:active::after {
+  opacity: 1;
+  transform: scale(2.5);
+  transition: 0s;
+}

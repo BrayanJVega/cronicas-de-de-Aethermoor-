@@ -1,0 +1,92 @@
+/* ============================================
+   CARDS — Reusable card components
+   ============================================ */
+
+.card {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  padding: var(--space-6);
+  backdrop-filter: blur(12px);
+  transition: all var(--transition-base);
+}
+
+.card:hover {
+  border-color: var(--color-border-hover);
+  box-shadow: var(--shadow-lg);
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-4);
+}
+
+.card-title {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-heading);
+}
+
+.card-body {
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  line-height: var(--line-height-relaxed);
+}
+
+.card-footer {
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* Item card — with rarity border glow */
+.card-item {
+  position: relative;
+  cursor: pointer;
+}
+
+.card-item.rarity-common { border-color: var(--color-rarity-common); }
+.card-item.rarity-rare { border-color: var(--color-rarity-rare); box-shadow: 0 0 12px rgba(59, 130, 246, 0.15); }
+.card-item.rarity-epic { border-color: var(--color-rarity-epic); box-shadow: 0 0 12px rgba(139, 92, 246, 0.15); }
+.card-item.rarity-legendary { border-color: var(--color-rarity-legendary); box-shadow: 0 0 16px rgba(245, 158, 11, 0.2); }
+
+.card-item.rarity-legendary:hover {
+  box-shadow: 0 0 30px rgba(245, 158, 11, 0.35);
+}
+
+/* Class selection card */
+.card-class {
+  cursor: pointer;
+  text-align: center;
+  padding: var(--space-8);
+}
+
+.card-class:hover {
+  transform: translateY(-4px);
+  border-color: var(--color-accent-gold);
+  box-shadow: var(--shadow-glow-gold);
+}
+
+.card-class.selected {
+  border-color: var(--color-accent-gold);
+  background: rgba(245, 158, 11, 0.08);
+  box-shadow: var(--shadow-glow-gold);
+}
+
+.card-class-icon {
+  font-size: 3rem;
+  margin-bottom: var(--space-4);
+}
+
+.card-class-name {
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  color: var(--color-accent-gold);
+  margin-bottom: var(--space-2);
+}

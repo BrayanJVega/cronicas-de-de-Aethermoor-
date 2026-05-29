@@ -1,0 +1,24 @@
+/* ============================================
+   MAIN CSS — Import aggregator
+   Order matters: base → components → pages → themes
+   ============================================ */
+
+/* Base */
+@import url('./base/variables.css');
+@import url('./base/reset.css');
+@import url('./base/typography.css');
+
+/* Components */
+@import url('./components/buttons.css');
+@import url('./components/cards.css');
+@import url('./components/modals.css');
+@import url('./components/bars.css');
+
+/* Pages */
+@import url('./pages/menu.css');
+@import url('./pages/game.css');
+@import url('./pages/combat.css');
+@import url('./pages/shop.css');
+
+/* Themes */
+@import url('./themes/dark.css');
